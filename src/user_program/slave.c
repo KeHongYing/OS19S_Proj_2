@@ -11,18 +11,20 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define IOCTL_PRINT 0x10101010
+
 int main (int argc, char* argv[])
 {
 	char buf[BUF_SIZE];
 	int i, dev_fd, file_fd;// the fd for the device and the fd for the input file
-	size_t ret, file_size = 0, data_size = -1;
+	size_t ret, file_size = 0, data_size = -1; //retern value, file size and data size
 	char file_name[50];
 	char method[20];
 	char ip[20];
 	struct timeval start;
 	struct timeval end;
 	double trans_time; //calulate the time between the device is opened and it is closed
-	char *kernel_address, *file_address;
+	char *kernel_address, *file_address; // used for mmap
 
 
 	strcpy(file_name, argv[1]);
@@ -59,9 +61,29 @@ int main (int argc, char* argv[])
 				file_size += ret;
 			}while(ret > 0);
 			break;
+
+		case 'm':
+			while(1){
+
+				ret = ioctl(dev_fd, 0x12345678);
+
+				if(ret == 0){
+					file_size = data_size;
+					break;
+				}
+
+				posix_fallocate(file_fd, data_size, ret);
+				file_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, data_size); //map to file addr
+				kernel_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, dev_fd, data_size); //map to kern addr
+				memcpy(file_address, kernel_address, ret); //copy memory
+				offset += ret;
+
+			}
+			break;
+
 	}
 
-
+	ioctl(dev_fd, IOCTL_PRINT); // default: display
 
 	if(ioctl(dev_fd, 0x12345679) == -1)// end receiving data, close the connection
 	{
@@ -70,7 +92,7 @@ int main (int argc, char* argv[])
 	}
 	gettimeofday(&end, NULL);
 	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
+	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size);
 
 
 	close(file_fd);

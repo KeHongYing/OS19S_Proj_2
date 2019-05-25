@@ -59,13 +59,52 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
+// mmap functions
+
+void mmap_open(struct vm_area_struct *vma) {
+	// Do nothing
+}
+
+void mmap_close(struct vm_area_struct *vma) {
+	// Do nothing
+}
+
+static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
+	vmf->page = virt_to_page(vma->vm_private_data);
+	get_page(vmf->page);
+	return 0;
+}
+
+static const struct vm_operations_struct my_vm_ops = {
+	.open = mmap_open,
+	.close = mmap_close,
+	.fault = mmap_fault
+};
+
+static int my_mmap(struct file *file, struct vm_area_struct *vma){
+	unsigned long pfn = virt_to_phys(file->private_data) >> PAGE_SHIFT;
+	remap_pfn_range(vma,
+		vma->vm_start,
+		pfn,
+        vma->vm_end - vma->vm_start,
+		vma->vm_page_prot
+	);
+	vma->vm_ops = &my_vm_ops;
+	vma->vm_flags |= VM_RESERVED;
+	vma->vm_private_data = file->private_data;
+	mmap_open(vma);
+	return 0;
+}
+
 //file operations
+
 static struct file_operations slave_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
 	.release = slave_close
+	.mmap = my_mmap //add mmap
 };
 
 //device info
@@ -101,11 +140,13 @@ static void __exit slave_exit(void)
 
 int slave_close(struct inode *inode, struct file *filp)
 {
+	kfree(filp->private_data);
 	return 0;
 }
 
 int slave_open(struct inode *inode, struct file *filp)
 {
+	filp->private_data = kmalloc(MAP_SIZE, GFP_KERNEL);
 	return 0;
 }
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
@@ -162,9 +203,22 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			printk("kfree(tmp)");
 			ret = 0;
 			break;
-		case slave_IOCTL_MMAP:
 
+		// mmap
+		case slave_IOCTL_MMAP:
+			while (1) {
+				len = krecv(sockfd_cli, buf, sizeof(buf), 0);
+				if (len == 0) {
+					break;
+				}
+
+				memcpy(file->private_data + data_size, buf, len);
+				offset += len;
+			}
+
+			ret = data_size;
 			break;
+
 
 		case slave_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
