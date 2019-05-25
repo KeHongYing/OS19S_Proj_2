@@ -185,12 +185,12 @@ static void __exit master_exit(void)
 int master_close(struct inode *inode, struct file *filp)
 {
 	kfree( filp->private_data );
-    return 0;
+    	return 0;
 }
 
 int master_open(struct inode *inode, struct file *filp)
 {
-    filp->private = kmalloc(MMAP_SIZE, GFP_KERNEL);
+    	filp->private = kmalloc(MMAP_SIZE, GFP_KERNEL);
 	return 0;
 }
 
@@ -204,7 +204,7 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 	p4d_t *p4d;
 	pud_t *pud;
 	pmd_t *pmd;
-    pte_t *ptep, pte;
+    	pte_t *ptep, pte;
 	//old_fs = get_fs();
 	//set_fs(KERNEL_DS);
 	switch(ioctl_num){
