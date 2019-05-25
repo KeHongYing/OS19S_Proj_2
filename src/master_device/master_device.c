@@ -76,9 +76,16 @@ static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
     return 0;
 }
 
+// mmap operations
+static struct vm_operations_struct my_vm_ops = {
+    .open = mmap_open,
+    .close = mmap_close,
+    .fault = mmap_fault
+};
+
 static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 {   
-    unsigned long pfn = virt_to_phys(file->private_data) >> PAGE_SHIFT;
+    unsigned long pfn = virt_to_phys(filp->private_data) >> PAGE_SHIFT;
     if( remap_pfn_range( vma,
                          vma->vm_start,
                          pfn,
@@ -96,13 +103,6 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
 
     return 0;
 }
-
-// mmap operations
-static struct vm_operations_struct my_vm_ops = {
-    .open = mmap_open,
-    .close = mmap_close,
-    .fault = mmap_fault
-};
 
 //file operations
 static struct file_operations master_fops = {
@@ -190,7 +190,7 @@ int master_close(struct inode *inode, struct file *filp)
 
 int master_open(struct inode *inode, struct file *filp)
 {
-    	filp->private = kmalloc(MMAP_SIZE, GFP_KERNEL);
+    	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL);
 	return 0;
 }
 
@@ -198,7 +198,7 @@ int master_open(struct inode *inode, struct file *filp)
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	long ret = -EINVAL;
-	size_t data_size = 0, offset = 0;
+	// size_t data_size = 0, offset = 0;
 	char *tmp;
 	pgd_t *pgd;
 	p4d_t *p4d;
@@ -224,6 +224,7 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
+			ksend(sockfd_cli, file->private_data, ioctl_param, 0);
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
