@@ -29,11 +29,8 @@
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
 
-
+#define MMAP_SIZE 64 * PAGE_SIZE
 #define BUF_SIZE 512
-
-
-
 
 struct dentry  *file1;//debug file
 
@@ -69,7 +66,7 @@ void mmap_close(struct vm_area_struct *vma) {
 	// Do nothing
 }
 
-static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
+int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
 	vmf->page = virt_to_page(vma->vm_private_data);
 	get_page(vmf->page);
 	return 0;
@@ -104,7 +101,7 @@ static struct file_operations slave_fops = {
 	.open = slave_open,
 	.read = receive_msg,
 	.release = slave_close
-	.mmap = my_mmap //add mmap
+	.mmap = my_mmap
 };
 
 //device info
@@ -146,7 +143,7 @@ int slave_close(struct inode *inode, struct file *filp)
 
 int slave_open(struct inode *inode, struct file *filp)
 {
-	filp->private_data = kmalloc(MAP_SIZE, GFP_KERNEL);
+	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL);
 	return 0;
 }
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
@@ -213,7 +210,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 				}
 
 				memcpy(file->private_data + data_size, buf, len);
-				offset += len;
+				data_size += len;
 			}
 
 			ret = data_size;
