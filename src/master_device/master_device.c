@@ -67,7 +67,7 @@ void mmap_close(struct vm_area_struct *vma){
     return;
 }
 
-static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
     struct page *pg = virt_to_page(vma->vm_private_data);
     get_page( pg );
