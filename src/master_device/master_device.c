@@ -96,7 +96,7 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
         return -1;
     }
 
-    vma->vm_private_data = file->private_data;
+    vma->vm_private_data = filp->private_data;
     vma->vm_ops = &my_vm_ops;
     vma->vm_flags |= VM_RESERVED;
     mmap_open(vma);
