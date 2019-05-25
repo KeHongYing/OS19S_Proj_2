@@ -76,7 +76,7 @@ int main (int argc, char* argv[])
 				file_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, data_size); //map to file addr
 				kernel_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, dev_fd, data_size); //map to kern addr
 				memcpy(file_address, kernel_address, ret); //copy memory
-				offset += ret;
+				data_size += ret;
 
 			}
 			break;
