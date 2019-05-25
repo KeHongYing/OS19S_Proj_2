@@ -13,6 +13,7 @@
 #define BUF_SIZE 512
 #define MMAP_SIZE 64 * PAGE_SIZE
 #define IOCTL_MMAP 0x12345678
+#define IOCTL_PRINT 0x10101010
 
 size_t get_filesize(const char* filename);//get the size of the input file
 
@@ -84,6 +85,8 @@ int main (int argc, char* argv[])
             }
             break;
 	}
+	
+	ioctl(dev_fd, IOCTL_PRINT);
 
 	if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
 	{
