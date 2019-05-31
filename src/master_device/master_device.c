@@ -20,6 +20,8 @@
 #include <linux/mm.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
+#include <linux/highmem.h>
+
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -28,8 +30,9 @@
 #define master_IOCTL_CREATESOCK 0x12345677
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
+
 #define BUF_SIZE 512
-#define MMAP_SIZE 64 * PAGE_SIZE
+#define MMAP_SIZE PAGE_SIZE * 64
 
 typedef struct socket * ksocket_t;
 
@@ -67,12 +70,11 @@ void mmap_close(struct vm_area_struct *vma){
     return;
 }
 
-int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+static int mmap_fault(struct vm_fault *vmf)
 {
-    struct page *pg = virt_to_page(vma->vm_private_data);
-    get_page( pg );
-    vmf->page = pg;
-
+    vmf->page = virt_to_page(vmf->vma->vm_private_data);
+	get_page(vmf->page);
+	printk(KERN_INFO "master page fault handled");
     return 0;
 }
 
@@ -100,6 +102,8 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
     vma->vm_ops = &my_vm_ops;
     vma->vm_flags |= VM_RESERVED;
     mmap_open(vma);
+	
+	printk(KERN_INFO "my_mmap executed\n");
 
     return 0;
 }
@@ -111,7 +115,7 @@ static struct file_operations master_fops = {
 	.open = master_open,
 	.write = send_msg,
 	.release = master_close,
-    .mmap = my_mmap
+	.mmap = my_mmap
 };
 
 //device info
@@ -164,7 +168,7 @@ static int __init master_init(void)
 		return -1;
 	}
     printk("master_device init OK\n");
-
+	set_fs(old_fs);
 	return 0;
 }
 
@@ -184,13 +188,15 @@ static void __exit master_exit(void)
 
 int master_close(struct inode *inode, struct file *filp)
 {
-	kfree( filp->private_data );
-    	return 0;
+	kfree(filp->private_data);
+	printk(KERN_INFO "master closed!\n");
+	return 0;
 }
 
 int master_open(struct inode *inode, struct file *filp)
 {
-    	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL);
+	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL);
+	printk(KERN_INFO "master opened!\n");
 	return 0;
 }
 
@@ -198,15 +204,15 @@ int master_open(struct inode *inode, struct file *filp)
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	long ret = -EINVAL;
-	// size_t data_size = 0, offset = 0;
+	//size_t data_size = 0, offset = 0;
 	char *tmp;
 	pgd_t *pgd;
 	p4d_t *p4d;
 	pud_t *pud;
 	pmd_t *pmd;
-    	pte_t *ptep, pte;
-	//old_fs = get_fs();
-	//set_fs(KERNEL_DS);
+    pte_t *ptep, pte;
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
 	switch(ioctl_num){
 		case master_IOCTL_CREATESOCK:// create socket and accept a connection
 			sockfd_cli = kaccept(sockfd_srv, (struct sockaddr *)&addr_cli, &addr_len);
@@ -224,7 +230,9 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
+			printk("%s\n", file->private_data);
 			ksend(sockfd_cli, file->private_data, ioctl_param, 0);
+			ret = 0;
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -236,16 +244,21 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			break;
 		default:
 			pgd = pgd_offset(current->mm, ioctl_param);
+			printk("master pgd: %lX\n", *pgd);
 			p4d = p4d_offset(pgd, ioctl_param);
+			printk("master p4d: %lX\n", *p4d);
 			pud = pud_offset(p4d, ioctl_param);
+			printk("master pud: %lX\n", *pud);
 			pmd = pmd_offset(pud, ioctl_param);
+			printk("master pmd: %lX\n", *pmd);
 			ptep = pte_offset_kernel(pmd , ioctl_param);
 			pte = *ptep;
-			printk("master page descriptor: %lX\n", pte);
+			printk("Master page descriptor: %lX\n", pte);
 			ret = 0;
 			break;
 	}
 
+	set_fs(old_fs);
 	return ret;
 }
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)

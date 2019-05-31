@@ -11,12 +11,12 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
-#define MMAP_SIZE 64 * PAGE_SIZE
+#define MMAP_SIZE PAGE_SIZE * 64
+
 #define IOCTL_MMAP 0x12345678
-#define IOCTL_PRINT 0x10101010
+#define IOCTL_PRINT 7122
 
 size_t get_filesize(const char* filename);//get the size of the input file
-
 
 int main (int argc, char* argv[])
 {
@@ -63,30 +63,40 @@ int main (int argc, char* argv[])
 	switch(method[0])
 	{
 		case 'f': //fcntl : read()/write()
+			//printf("In fcntl\n");
 			do
 			{
 				ret = read(file_fd, buf, sizeof(buf)); // read from the input file
-				write(dev_fd, buf, ret);//write to the the device
+				if( ret > 0 ){
+					write(dev_fd, buf, ret); //write to the the device
+					printf("%s written\n", buf);
+				}
 			}while(ret > 0);
 			break;
+
 		case 'm': //mmap
 			while( offset < file_size ){
+				// printf("offset: %ld\n", offset);
 				size_t blk_len = (file_size-offset < MMAP_SIZE)? (file_size-offset) : MMAP_SIZE;
 				file_address = mmap(NULL, blk_len, PROT_READ, MAP_SHARED, file_fd, offset);
 				kernel_address = mmap(NULL, blk_len, PROT_WRITE, MAP_SHARED, dev_fd, offset);
 
-                memcpy(kernel_address, file_address, blk_len);
-                if( ioctl(dev_fd, IOCTL_MMAP, blk_len) == -1 ){
-                    perror("master ioctl mmap failed\n");
-                    return 2;
-                }
+                		memcpy(kernel_address, file_address, blk_len);
+				offset += blk_len;
+                		if( ioctl(dev_fd, IOCTL_MMAP, blk_len) == -1 ){
+                    			perror("master ioctl mmap failed\n");
+                    			return 2;
+                		}
 
-                offset += blk_len;
-            }
-            break;
+                		
+            		}
+			break;
 	}
-	
-	ioctl(dev_fd, IOCTL_PRINT);
+
+	if( ioctl(dev_fd, IOCTL_PRINT) == -1 ){
+		perror("master ioctl print page descriptor failed\n");
+		return 3;
+	}
 
 	if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
 	{
@@ -95,7 +105,7 @@ int main (int argc, char* argv[])
 	}
 	gettimeofday(&end, NULL);
 	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size);
+	printf("Master Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size);
 
 	close(file_fd);
 	close(dev_fd);
