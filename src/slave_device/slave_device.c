@@ -29,8 +29,11 @@
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
 
-#define MMAP_SIZE 64 * PAGE_SIZE
+
 #define BUF_SIZE 512
+
+
+
 
 struct dentry  *file1;//debug file
 
@@ -56,52 +59,13 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
-// mmap functions
-
-void mmap_open(struct vm_area_struct *vma) {
-	// Do nothing
-}
-
-void mmap_close(struct vm_area_struct *vma) {
-	// Do nothing
-}
-
-int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
-	vmf->page = virt_to_page(vma->vm_private_data);
-	get_page(vmf->page);
-	return 0;
-}
-
-static const struct vm_operations_struct my_vm_ops = {
-	.open = mmap_open,
-	.close = mmap_close,
-	.fault = mmap_fault
-};
-
-static int my_mmap(struct file *file, struct vm_area_struct *vma){
-	unsigned long pfn = virt_to_phys(file->private_data) >> PAGE_SHIFT;
-	remap_pfn_range(vma,
-		vma->vm_start,
-		pfn,
-        vma->vm_end - vma->vm_start,
-		vma->vm_page_prot
-	);
-	vma->vm_ops = &my_vm_ops;
-	vma->vm_flags |= VM_RESERVED;
-	vma->vm_private_data = file->private_data;
-	mmap_open(vma);
-	return 0;
-}
-
 //file operations
-
 static struct file_operations slave_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
-	.release = slave_close,
-	.mmap = my_mmap
+	.release = slave_close
 };
 
 //device info
@@ -137,13 +101,11 @@ static void __exit slave_exit(void)
 
 int slave_close(struct inode *inode, struct file *filp)
 {
-	kfree(filp->private_data);
 	return 0;
 }
 
 int slave_open(struct inode *inode, struct file *filp)
 {
-	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL);
 	return 0;
 }
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
@@ -200,22 +162,9 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			printk("kfree(tmp)");
 			ret = 0;
 			break;
-
-		// mmap
 		case slave_IOCTL_MMAP:
-			while (1) {
-				len = krecv(sockfd_cli, buf, sizeof(buf), 0);
-				if (len == 0) {
-					break;
-				}
 
-				memcpy(file->private_data + data_size, buf, len);
-				data_size += len;
-			}
-
-			ret = data_size;
 			break;
-
 
 		case slave_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -232,7 +181,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			pmd = pmd_offset(pud, ioctl_param);
 			ptep = pte_offset_kernel(pmd , ioctl_param);
 			pte = *ptep;
-			printk("slave page descriptor: %lX\n", pte);
+			printk("slave: %lX\n", pte);
 			ret = 0;
 			break;
 	}
