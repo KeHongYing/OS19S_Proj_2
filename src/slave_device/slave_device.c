@@ -31,7 +31,7 @@
 
 
 #define BUF_SIZE 512
-
+#define MMAP_SIZE PAGE_SIZE * 64
 
 
 
@@ -59,13 +59,61 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
+// function-setting for mmap
+
+void mmap_open(struct vm_area_struct *vma){
+    return;
+}
+
+void mmap_close(struct vm_area_struct *vma){
+    return;
+}
+
+static int mmap_fault(struct vm_fault *vmf)
+{
+    vmf->page = virt_to_page(vmf->vma->vm_private_data);
+	get_page(vmf->page);
+	printk(KERN_INFO "slave page fault handled");
+    return 0;
+}
+
+static struct vm_operations_struct my_vm_ops = {
+    .open = mmap_open,
+    .close = mmap_close,
+    .fault = mmap_fault
+};
+
+static int my_mmap(struct file *filp, struct vm_area_struct *vma)
+{   
+    unsigned long pfn = virt_to_phys(filp->private_data) >> PAGE_SHIFT;
+    if( remap_pfn_range( vma,
+                         vma->vm_start,
+                         pfn,
+                         vma->vm_end - vma->vm_start,
+                         vma->vm_page_prot) )
+    {
+        printk(KERN_INFO "slave device remap failed\n");
+        return -1;
+    }
+
+    vma->vm_private_data = filp->private_data;
+    vma->vm_ops = &my_vm_ops;
+    vma->vm_flags |= VM_RESERVED;
+    mmap_open(vma);
+	
+	printk(KERN_INFO "my_mmap executed\n");
+
+    return 0;
+}
+
 //file operations
 static struct file_operations slave_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
-	.release = slave_close
+	.release = slave_close,
+	.mmap = my_mmap
 };
 
 //device info
@@ -101,13 +149,16 @@ static void __exit slave_exit(void)
 
 int slave_close(struct inode *inode, struct file *filp)
 {
+	kfree(filp->private_data);
 	return 0;
 }
 
 int slave_open(struct inode *inode, struct file *filp)
 {
+	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL);
 	return 0;
 }
+
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	long ret = -EINVAL;
@@ -162,8 +213,17 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			printk("kfree(tmp)");
 			ret = 0;
 			break;
-		case slave_IOCTL_MMAP:
 
+		case slave_IOCTL_MMAP:
+			while(1){
+				len = krecv(sockfd_cli, buf, sizeof(buf), 0);
+				if(len == 0){
+					break;
+				}
+				memcpy(file->private_data + data_size, buf, len);
+				data_size += len;
+			}
+			ret = data_size;
 			break;
 
 		case slave_IOCTL_EXIT:
