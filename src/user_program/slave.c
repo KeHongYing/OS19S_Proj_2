@@ -11,11 +11,16 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define MMAP_SIZE PAGE_SIZE * 64
+
+#define IOCTL_MMAP 0x12345678
+#define IOCTL_PRINT 7122
+
 int main (int argc, char* argv[])
 {
 	char buf[BUF_SIZE];
 	int i, dev_fd, file_fd;// the fd for the device and the fd for the input file
-	size_t ret, file_size = 0, data_size = -1;
+	size_t ret, file_size = 0, data_size = 0;
 	char file_name[50];
 	char method[20];
 	char ip[20];
@@ -59,9 +64,29 @@ int main (int argc, char* argv[])
 				file_size += ret;
 			}while(ret > 0);
 			break;
+
+		case 'm':
+			while(1){
+				ret = ioctl(dev_fd, IOCTL_MMAP);
+				if( ret < 0 ){
+					perror("slave ioctl mmap failed\n");
+					return 2;
+				}else if( ret == 0 ){
+					file_size = data_size;
+					break;
+				}
+				posix_fallocate(file_fd, data_size, ret);
+				file_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, data_size);
+				kernel_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, dev_fd, data_size);
+				data_size += ret;
+			}
+			break;
 	}
 
-
+	if( ioctl(dev_fd, IOCTL_PRINT) == -1 ){
+		perror("master ioctl print page descriptor failed\n");
+		return 3;
+	}
 
 	if(ioctl(dev_fd, 0x12345679) == -1)// end receiving data, close the connection
 	{
