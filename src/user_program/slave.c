@@ -14,7 +14,7 @@
 #define MMAP_SIZE PAGE_SIZE * 64
 
 #define IOCTL_MMAP 0x12345678
-#define IOCTL_PRINT 7122
+#define IOCTL_PRINT 0x10101010
 
 int main (int argc, char* argv[])
 {
@@ -78,6 +78,7 @@ int main (int argc, char* argv[])
 				posix_fallocate(file_fd, data_size, ret);
 				file_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, data_size);
 				kernel_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, dev_fd, data_size);
+				memcpy(file_address, kernel_address, ret);
 				data_size += ret;
 			}
 			break;
@@ -90,12 +91,12 @@ int main (int argc, char* argv[])
 
 	if(ioctl(dev_fd, 0x12345679) == -1)// end receiving data, close the connection
 	{
-		perror("ioclt client exits error\n");
+		perror("ioctl client exits error\n");
 		return 1;
 	}
 	gettimeofday(&end, NULL);
 	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size);
+	printf("Slave Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size);
 
 
 	close(file_fd);

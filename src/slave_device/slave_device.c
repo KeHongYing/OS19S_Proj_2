@@ -150,12 +150,14 @@ static void __exit slave_exit(void)
 int slave_close(struct inode *inode, struct file *filp)
 {
 	kfree(filp->private_data);
+	printk(KERN_INFO "slave closed!\n");
 	return 0;
 }
 
 int slave_open(struct inode *inode, struct file *filp)
 {
 	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL);
+	printk(KERN_INFO "slave opened!\n");
 	return 0;
 }
 
@@ -215,11 +217,14 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			break;
 
 		case slave_IOCTL_MMAP:
+			printk("slave device ioctl mmap");
 			while(1){
 				len = krecv(sockfd_cli, buf, sizeof(buf), 0);
 				if(len == 0){
 					break;
 				}
+				printk("slave buflen: %ld\n", len);
+				printk("%s\n", buf);
 				memcpy(file->private_data + data_size, buf, len);
 				data_size += len;
 			}
@@ -227,6 +232,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			break;
 
 		case slave_IOCTL_EXIT:
+			printk("slave device ioctl exit");
 			if(kclose(sockfd_cli) == -1)
 			{
 				printk("kclose cli error\n");
@@ -235,13 +241,14 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		default:
+			printk("slave device ioctl pgtable");
             pgd = pgd_offset(current->mm, ioctl_param);
 			p4d = p4d_offset(pgd, ioctl_param);
 			pud = pud_offset(p4d, ioctl_param);
 			pmd = pmd_offset(pud, ioctl_param);
 			ptep = pte_offset_kernel(pmd , ioctl_param);
 			pte = *ptep;
-			printk("slave: %lX\n", pte);
+			printk("Slave page descriptor: %lX\n", pte);
 			ret = 0;
 			break;
 	}
