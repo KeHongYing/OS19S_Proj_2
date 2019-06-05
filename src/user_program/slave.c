@@ -11,7 +11,7 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
-#define MMAP_SIZE PAGE_SIZE * 64
+#define MMAP_SIZE PAGE_SIZE * 128
 
 #define IOCTL_MMAP 0x12345678
 #define IOCTL_PRINT 0x10101010
@@ -52,7 +52,7 @@ int main (int argc, char* argv[])
 		return 1;
 	}
 
-    write(1, "ioctl success\n", 14);
+    //write(1, "ioctl success\n", 14);
 
 	switch(method[0])
 	{
@@ -68,6 +68,7 @@ int main (int argc, char* argv[])
 		case 'm':
 			while(1){
 				ret = ioctl(dev_fd, IOCTL_MMAP);
+				//printf("slave ioctl return %ld\n", ret);
 				if( ret < 0 ){
 					perror("slave ioctl mmap failed\n");
 					return 2;
@@ -77,7 +78,7 @@ int main (int argc, char* argv[])
 				}
 				posix_fallocate(file_fd, data_size, ret);
 				file_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, data_size);
-				kernel_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, dev_fd, data_size);
+				kernel_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, dev_fd, 0);
 				memcpy(file_address, kernel_address, ret);
 				data_size += ret;
 			}
@@ -85,7 +86,7 @@ int main (int argc, char* argv[])
 	}
 
 	if( ioctl(dev_fd, IOCTL_PRINT) == -1 ){
-		perror("master ioctl print page descriptor failed\n");
+		perror("slave ioctl print page descriptor failed\n");
 		return 3;
 	}
 
