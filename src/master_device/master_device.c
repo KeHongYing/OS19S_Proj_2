@@ -32,7 +32,7 @@
 #define master_IOCTL_EXIT 0x12345679
 
 #define BUF_SIZE 512
-#define MMAP_SIZE PAGE_SIZE * 64
+#define MMAP_SIZE PAGE_SIZE * 128
 
 typedef struct socket * ksocket_t;
 
@@ -103,7 +103,7 @@ static int my_mmap(struct file *filp, struct vm_area_struct *vma)
     vma->vm_flags |= VM_RESERVED;
     mmap_open(vma);
 	
-	printk(KERN_INFO "my_mmap executed\n");
+	printk(KERN_INFO "master my_mmap executed\n");
 
     return 0;
 }
@@ -230,7 +230,8 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
-			printk("%s\n", file->private_data);
+			//printk("%s\n", file->private_data);
+			printk(KERN_INFO "master ioctl mmap");
 			ksend(sockfd_cli, file->private_data, ioctl_param, 0);
 			ret = 0;
 			break;

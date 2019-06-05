@@ -11,7 +11,7 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
-#define MMAP_SIZE PAGE_SIZE * 64
+#define MMAP_SIZE PAGE_SIZE * 128
 
 #define IOCTL_MMAP 0x12345678
 #define IOCTL_PRINT 7122
@@ -69,9 +69,10 @@ int main (int argc, char* argv[])
 				ret = read(file_fd, buf, sizeof(buf)); // read from the input file
 				if( ret > 0 ){
 					write(dev_fd, buf, ret); //write to the the device
-					printf("%s written\n", buf);
+					// printf("%s written\n", buf);
 				}
-			}while(ret > 0);
+			}while(ret > 0);			
+			ioctl(dev_fd, IOCTL_PRINT);
 			break;
 
 		case 'm': //mmap
@@ -87,16 +88,11 @@ int main (int argc, char* argv[])
                     			perror("master ioctl mmap failed\n");
                     			return 2;
                 		}
-
-                		
             		}
+			ioctl(dev_fd, IOCTL_PRINT);
 			break;
 	}
 
-	if( ioctl(dev_fd, IOCTL_PRINT) == -1 ){
-		perror("master ioctl print page descriptor failed\n");
-		return 3;
-	}
 
 	if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
 	{
